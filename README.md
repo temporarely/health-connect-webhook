@@ -1,3 +1,6 @@
+> **⚠️ Experimental Fork**
+> This is a personal experimental fork of [mcnaveen/health-connect-webhook](https://github.com/mcnaveen/health-connect-webhook) with unreleased patches applied. It may be unstable. For the stable version, use the original repo.
+
 # Health Connect to Webhook
 
 ![HC Webhook](image.png)
