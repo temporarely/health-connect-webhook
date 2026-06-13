@@ -4,11 +4,7 @@ on:
   push:
     tags:
       - "v*.*.*"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Version tag (e.g. v1.10.0)"
-        required: true
+  workflow_dispatch: # version is read from app/build.gradle.kts automatically
 
 permissions:
   contents: write
@@ -28,7 +24,10 @@ jobs:
         id: version
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            TAG="${{ github.event.inputs.tag }}"
+            MAJOR=$(grep 'val appVersionMajor' app/build.gradle.kts | grep -oP '\d+')
+            MINOR=$(grep 'val appVersionMinor' app/build.gradle.kts | grep -oP '\d+')
+            PATCH=$(grep 'val appVersionPatch' app/build.gradle.kts | grep -oP '\d+')
+            TAG="v${MAJOR}.${MINOR}.${PATCH}"
           else
             TAG="${GITHUB_REF_NAME}"
           fi
