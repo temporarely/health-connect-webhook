@@ -1,5 +1,7 @@
 > **⚠️ Experimental Fork**
 > This is a personal experimental fork of [mcnaveen/health-connect-webhook](https://github.com/mcnaveen/health-connect-webhook) with unreleased patches applied. It may be unstable. For the stable version, use the original repo.
+>
+> **Technical note:** On some devices `healthConnectClient.readRecords()` hangs indefinitely because Health Connect must contact the data source app (Samsung Health, Google Health) which may not respond. This fork replaces all `readRecords` calls with `healthConnectClient.aggregate()` calls (per calendar day), which read from Health Connect's local index and return immediately. Types that have no aggregate equivalent (sleep sessions, exercise sessions, nutrition, skin temperature, basal metabolic rate) still use `readRecords` and are guarded by a 15-second per-type timeout.
 
 # Health Connect to Webhook
 

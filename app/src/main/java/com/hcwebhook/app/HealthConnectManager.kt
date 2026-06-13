@@ -611,33 +611,27 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun averageHeartRateBpm(startTime: Instant, endTime: Instant): Double? {
-        val request = ReadRecordsRequest(
-            recordType = HeartRateRecord::class,
+        val request = AggregateRequest(
+            metrics = setOf(HeartRateRecord.BPM_AVG),
             timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
         )
-        val samples = readAllRecords(request).flatMap { it.samples }
-        if (samples.isEmpty()) return null
-        return samples.map { it.beatsPerMinute.toDouble() }.average()
+        return aggregateRL(request)[HeartRateRecord.BPM_AVG]?.toDouble()
     }
 
     private suspend fun averageHeartRateVariabilityMs(startTime: Instant, endTime: Instant): Double? {
-        val request = ReadRecordsRequest(
-            recordType = HeartRateVariabilityRmssdRecord::class,
+        val request = AggregateRequest(
+            metrics = setOf(HeartRateVariabilityRmssdRecord.HEART_RATE_VARIABILITY_MILLIS_AVG),
             timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
         )
-        val records = readAllRecords(request)
-        if (records.isEmpty()) return null
-        return records.map { it.heartRateVariabilityMillis }.average()
+        return aggregateRL(request)[HeartRateVariabilityRmssdRecord.HEART_RATE_VARIABILITY_MILLIS_AVG]
     }
 
     private suspend fun averageRespiratoryRate(startTime: Instant, endTime: Instant): Double? {
-        val request = ReadRecordsRequest(
-            recordType = RespiratoryRateRecord::class,
+        val request = AggregateRequest(
+            metrics = setOf(RespiratoryRateRecord.RATE_AVG),
             timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
         )
-        val records = readAllRecords(request)
-        if (records.isEmpty()) return null
-        return records.map { it.rate }.average()
+        return aggregateRL(request)[RespiratoryRateRecord.RATE_AVG]
     }
 
     private suspend fun aggregateTotalCalories(startTime: Instant, endTime: Instant): Double {
@@ -677,21 +671,9 @@ class HealthConnectManager(private val context: Context) {
                 metrics = setOf(StepsRecord.COUNT_TOTAL),
                 timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
             )
-            val aggregateResponse = aggregateRL(aggregateRequest)
-            val aggregateSteps = aggregateResponse[StepsRecord.COUNT_TOTAL]
+            val daySteps = aggregateRL(aggregateRequest)[StepsRecord.COUNT_TOTAL] ?: 0L
 
-            val daySteps: Long = if (aggregateSteps != null && aggregateSteps > 0L) {
-                aggregateSteps
-            } else {
-                // Aggregate returned null — fall back to summing raw records.
-                val rawRequest = ReadRecordsRequest(
-                    recordType = StepsRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
-                )
-                readAllRecords(rawRequest).sumOf { it.count }
-            }
-
-            if (daySteps > 0) {
+            if (daySteps > 0L) {
                 result.add(StepsData(
                     count = daySteps,
                     startTime = dayStart,
@@ -740,21 +722,29 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readHeartRateData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<HeartRateData> {
-        val request = ReadRecordsRequest(recordType = HeartRateRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response
-            .flatMap { record ->
-                record.samples
-                    .filter { lastSync == null || it.time >= lastSync }
-                    .map { HeartRateData(it.beatsPerMinute, it.time) }
-            }
+        val result = mutableListOf<HeartRateData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(HeartRateRecord.BPM_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val bpm = aggregateRL(request)[HeartRateRecord.BPM_AVG]
+            if (bpm != null && bpm > 0L) result.add(HeartRateData(bpm, dayStart))
+        }
+        return result
     }
 
     private suspend fun readHeartRateVariabilityData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<HeartRateVariabilityData> {
-        val request = ReadRecordsRequest(recordType = HeartRateVariabilityRmssdRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { HeartRateVariabilityData(it.heartRateVariabilityMillis, it.time) }
+        val result = mutableListOf<HeartRateVariabilityData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(HeartRateVariabilityRmssdRecord.HEART_RATE_VARIABILITY_MILLIS_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val hrv = aggregateRL(request)[HeartRateVariabilityRmssdRecord.HEART_RATE_VARIABILITY_MILLIS_AVG]
+            if (hrv != null && hrv > 0.0) result.add(HeartRateVariabilityData(hrv, dayStart))
+        }
+        return result
     }
 
     private suspend fun readDistanceData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<DistanceData> {
@@ -838,52 +828,96 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readTotalCaloriesData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<TotalCaloriesData> {
-        val request = ReadRecordsRequest(recordType = TotalCaloriesBurnedRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.endTime >= lastSync }
-            .map { TotalCaloriesData(it.energy.inKilocalories, it.startTime, it.endTime) }
+        val result = mutableListOf<TotalCaloriesData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(TotalCaloriesBurnedRecord.ENERGY_TOTAL),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val calories = aggregateRL(request)[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories ?: 0.0
+            if (calories > 0.0) result.add(TotalCaloriesData(calories, dayStart, queryEnd))
+        }
+        return result
     }
 
     private suspend fun readWeightData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<WeightData> {
-        val request = ReadRecordsRequest(recordType = WeightRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { WeightData(it.weight.inKilograms, it.time) }
+        val result = mutableListOf<WeightData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(WeightRecord.WEIGHT_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val kg = aggregateRL(request)[WeightRecord.WEIGHT_AVG]?.inKilograms
+            if (kg != null && kg > 0.0) result.add(WeightData(kg, dayStart))
+        }
+        return result
     }
 
     private suspend fun readHeightData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<HeightData> {
-        val request = ReadRecordsRequest(recordType = HeightRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { HeightData(it.height.inMeters, it.time) }
+        val result = mutableListOf<HeightData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(HeightRecord.HEIGHT_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val meters = aggregateRL(request)[HeightRecord.HEIGHT_AVG]?.inMeters
+            if (meters != null && meters > 0.0) result.add(HeightData(meters, dayStart))
+        }
+        return result
     }
 
     private suspend fun readBloodPressureData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<BloodPressureData> {
-        val request = ReadRecordsRequest(recordType = BloodPressureRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { BloodPressureData(it.systolic.inMillimetersOfMercury, it.diastolic.inMillimetersOfMercury, it.time) }
+        val result = mutableListOf<BloodPressureData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(BloodPressureRecord.SYSTOLIC_AVG, BloodPressureRecord.DIASTOLIC_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val response = aggregateRL(request)
+            val systolic = response[BloodPressureRecord.SYSTOLIC_AVG]?.inMillimetersOfMercury
+            val diastolic = response[BloodPressureRecord.DIASTOLIC_AVG]?.inMillimetersOfMercury
+            if (systolic != null && diastolic != null) result.add(BloodPressureData(systolic, diastolic, dayStart))
+        }
+        return result
     }
 
     private suspend fun readBloodGlucoseData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<BloodGlucoseData> {
-        val request = ReadRecordsRequest(recordType = BloodGlucoseRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { BloodGlucoseData(it.level.inMillimolesPerLiter, it.time) }
+        val result = mutableListOf<BloodGlucoseData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(BloodGlucoseRecord.BLOOD_GLUCOSE_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val mmol = aggregateRL(request)[BloodGlucoseRecord.BLOOD_GLUCOSE_AVG]?.inMillimolesPerLiter
+            if (mmol != null && mmol > 0.0) result.add(BloodGlucoseData(mmol, dayStart))
+        }
+        return result
     }
 
     private suspend fun readOxygenSaturationData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<OxygenSaturationData> {
-        val request = ReadRecordsRequest(recordType = OxygenSaturationRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { OxygenSaturationData(it.percentage.value, it.time) }
+        val result = mutableListOf<OxygenSaturationData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(OxygenSaturationRecord.OXYGEN_SATURATION_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val pct = aggregateRL(request)[OxygenSaturationRecord.OXYGEN_SATURATION_AVG]?.value
+            if (pct != null && pct > 0.0) result.add(OxygenSaturationData(pct, dayStart))
+        }
+        return result
     }
 
     private suspend fun readBodyTemperatureData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<BodyTemperatureData> {
-        val request = ReadRecordsRequest(recordType = BodyTemperatureRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { BodyTemperatureData(it.temperature.inCelsius, it.time) }
+        val result = mutableListOf<BodyTemperatureData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(BodyTemperatureRecord.BODY_TEMPERATURE_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val celsius = aggregateRL(request)[BodyTemperatureRecord.BODY_TEMPERATURE_AVG]?.inCelsius
+            if (celsius != null) result.add(BodyTemperatureData(celsius, dayStart))
+        }
+        return result
     }
 
     private suspend fun readSkinTemperatureData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<SkinTemperatureData> {
@@ -904,17 +938,29 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readRespiratoryRateData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<RespiratoryRateData> {
-        val request = ReadRecordsRequest(recordType = RespiratoryRateRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { RespiratoryRateData(it.rate, it.time) }
+        val result = mutableListOf<RespiratoryRateData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(RespiratoryRateRecord.RATE_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val rate = aggregateRL(request)[RespiratoryRateRecord.RATE_AVG]
+            if (rate != null && rate > 0.0) result.add(RespiratoryRateData(rate, dayStart))
+        }
+        return result
     }
 
     private suspend fun readRestingHeartRateData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<RestingHeartRateData> {
-        val request = ReadRecordsRequest(recordType = RestingHeartRateRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { RestingHeartRateData(it.beatsPerMinute, it.time) }
+        val result = mutableListOf<RestingHeartRateData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(RestingHeartRateRecord.BPM_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val bpm = aggregateRL(request)[RestingHeartRateRecord.BPM_AVG]
+            if (bpm != null && bpm > 0L) result.add(RestingHeartRateData(bpm, dayStart))
+        }
+        return result
     }
 
     private suspend fun readExerciseData(
@@ -1019,10 +1065,16 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readHydrationData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<HydrationData> {
-        val request = ReadRecordsRequest(recordType = HydrationRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.endTime >= lastSync }
-            .map { HydrationData(it.volume.inLiters, it.startTime, it.endTime) }
+        val result = mutableListOf<HydrationData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(HydrationRecord.VOLUME_TOTAL),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val liters = aggregateRL(request)[HydrationRecord.VOLUME_TOTAL]?.inLiters ?: 0.0
+            if (liters > 0.0) result.add(HydrationData(liters, dayStart, queryEnd))
+        }
+        return result
     }
 
     private suspend fun readNutritionData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<NutritionData> {
@@ -1053,31 +1105,55 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readBodyFatData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<BodyFatData> {
-        val request = ReadRecordsRequest(recordType = BodyFatRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { BodyFatData(it.percentage.value, it.time) }
+        val result = mutableListOf<BodyFatData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(BodyFatRecord.BODY_FAT_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val pct = aggregateRL(request)[BodyFatRecord.BODY_FAT_AVG]?.value
+            if (pct != null && pct > 0.0) result.add(BodyFatData(pct, dayStart))
+        }
+        return result
     }
 
     private suspend fun readLeanBodyMassData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<LeanBodyMassData> {
-        val request = ReadRecordsRequest(recordType = LeanBodyMassRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { LeanBodyMassData(it.mass.inKilograms, it.time) }
+        val result = mutableListOf<LeanBodyMassData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(LeanBodyMassRecord.LEAN_BODY_MASS_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val kg = aggregateRL(request)[LeanBodyMassRecord.LEAN_BODY_MASS_AVG]?.inKilograms
+            if (kg != null && kg > 0.0) result.add(LeanBodyMassData(kg, dayStart))
+        }
+        return result
     }
 
     private suspend fun readVo2MaxData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<Vo2MaxData> {
-        val request = ReadRecordsRequest(recordType = Vo2MaxRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { Vo2MaxData(it.vo2MillilitersPerMinuteKilogram, it.time) }
+        val result = mutableListOf<Vo2MaxData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(Vo2MaxRecord.VO2_MAX_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val vo2 = aggregateRL(request)[Vo2MaxRecord.VO2_MAX_AVG]
+            if (vo2 != null && vo2 > 0.0) result.add(Vo2MaxData(vo2, dayStart))
+        }
+        return result
     }
 
     private suspend fun readBoneMassData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<BoneMassData> {
-        val request = ReadRecordsRequest(recordType = BoneMassRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { BoneMassData(it.mass.inKilograms, it.time) }
+        val result = mutableListOf<BoneMassData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(BoneMassRecord.BONE_MASS_AVG),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val kg = aggregateRL(request)[BoneMassRecord.BONE_MASS_AVG]?.inKilograms
+            if (kg != null && kg > 0.0) result.add(BoneMassData(kg, dayStart))
+        }
+        return result
     }
 
     /**
@@ -1138,6 +1214,27 @@ class HealthConnectManager(private val context: Context) {
         try { kotlinx.coroutines.withTimeoutOrNull(15_000L) { block() } ?: emptyList() }
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { emptyList() }
+
+    private suspend fun forEachDay(
+        startTime: Instant,
+        endTime: Instant,
+        lastSync: Instant?,
+        block: suspend (dayStart: Instant, queryStart: Instant, queryEnd: Instant) -> Unit
+    ) {
+        val zone = ZoneId.systemDefault()
+        var currentDate = startTime.atZone(zone).toLocalDate()
+        val endLocalDate = endTime.atZone(zone).toLocalDate()
+        while (!currentDate.isAfter(endLocalDate)) {
+            val dayStart = currentDate.atStartOfDay(zone).toInstant()
+            val dayEnd = currentDate.plusDays(1).atStartOfDay(zone).toInstant()
+            val queryStart = if (dayStart.isBefore(startTime)) startTime else dayStart
+            val queryEnd = if (dayEnd.isAfter(endTime)) endTime else dayEnd
+            if (lastSync == null || !queryEnd.isBefore(lastSync)) {
+                block(dayStart, queryStart, queryEnd)
+            }
+            currentDate = currentDate.plusDays(1)
+        }
+    }
 
     fun isHealthConnectAvailable(): Boolean {
         return try {
