@@ -1163,7 +1163,7 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun <T> readSafe(block: suspend () -> List<T>): List<T> =
-        try { block() }
+        try { kotlinx.coroutines.withTimeoutOrNull(15_000L) { block() } ?: emptyList() }
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { emptyList() }
 
