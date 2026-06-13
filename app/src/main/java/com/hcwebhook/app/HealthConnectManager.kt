@@ -1120,7 +1120,10 @@ class HealthConnectManager(private val context: Context) {
         var delayMs = 1_000L
         while (true) {
             try {
-                return block()
+                return kotlinx.coroutines.withTimeoutOrNull(10_000L) { block() }
+                    ?: throw Exception("Health Connect IPC timed out after 10s")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val msg = e.message?.lowercase().orEmpty()
                 val isRateLimit = msg.contains("rate limit") || msg.contains("quota")
