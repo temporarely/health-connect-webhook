@@ -301,39 +301,39 @@ class HealthConnectManager(private val context: Context) {
             }
 
             val stepsData = if (HealthDataType.STEPS in enabledTypes)
-                readSafe { readStepsData(startTime, endTime, lastSyncTimestamps[HealthDataType.STEPS]) } else emptyList()
+                readSafe("STEPS") { readStepsData(startTime, endTime, lastSyncTimestamps[HealthDataType.STEPS]) } else emptyList()
             val sleepData = if (HealthDataType.SLEEP in enabledTypes)
-                readSafe { readSleepData(startTime, endTime, lastSyncTimestamps[HealthDataType.SLEEP]) } else emptyList()
+                readSafe("SLEEP") { readSleepData(startTime, endTime, lastSyncTimestamps[HealthDataType.SLEEP]) } else emptyList()
             val heartRateData = if (HealthDataType.HEART_RATE in enabledTypes)
-                readSafe { readHeartRateData(startTime, endTime, lastSyncTimestamps[HealthDataType.HEART_RATE]) } else emptyList()
+                readSafe("HEART_RATE") { readHeartRateData(startTime, endTime, lastSyncTimestamps[HealthDataType.HEART_RATE]) } else emptyList()
             val heartRateVariabilityData = if (HealthDataType.HEART_RATE_VARIABILITY in enabledTypes)
-                readSafe { readHeartRateVariabilityData(startTime, endTime, lastSyncTimestamps[HealthDataType.HEART_RATE_VARIABILITY]) } else emptyList()
+                readSafe("HRV") { readHeartRateVariabilityData(startTime, endTime, lastSyncTimestamps[HealthDataType.HEART_RATE_VARIABILITY]) } else emptyList()
             val distanceData = if (HealthDataType.DISTANCE in enabledTypes)
-                readSafe { readDistanceData(startTime, endTime, lastSyncTimestamps[HealthDataType.DISTANCE]) } else emptyList()
+                readSafe("DISTANCE") { readDistanceData(startTime, endTime, lastSyncTimestamps[HealthDataType.DISTANCE]) } else emptyList()
             val activeCaloriesData = if (HealthDataType.ACTIVE_CALORIES in enabledTypes)
-                readSafe { readActiveCaloriesData(startTime, endTime, lastSyncTimestamps[HealthDataType.ACTIVE_CALORIES]) } else emptyList()
+                readSafe("ACTIVE_CAL") { readActiveCaloriesData(startTime, endTime, lastSyncTimestamps[HealthDataType.ACTIVE_CALORIES]) } else emptyList()
             val totalCaloriesData = if (HealthDataType.TOTAL_CALORIES in enabledTypes)
-                readSafe { readTotalCaloriesData(startTime, endTime, lastSyncTimestamps[HealthDataType.TOTAL_CALORIES]) } else emptyList()
+                readSafe("TOTAL_CAL") { readTotalCaloriesData(startTime, endTime, lastSyncTimestamps[HealthDataType.TOTAL_CALORIES]) } else emptyList()
             val weightData = if (HealthDataType.WEIGHT in enabledTypes)
-                readSafe { readWeightData(startTime, endTime, lastSyncTimestamps[HealthDataType.WEIGHT]) } else emptyList()
+                readSafe("WEIGHT") { readWeightData(startTime, endTime, lastSyncTimestamps[HealthDataType.WEIGHT]) } else emptyList()
             val heightData = if (HealthDataType.HEIGHT in enabledTypes)
-                readSafe { readHeightData(startTime, endTime, lastSyncTimestamps[HealthDataType.HEIGHT]) } else emptyList()
+                readSafe("HEIGHT") { readHeightData(startTime, endTime, lastSyncTimestamps[HealthDataType.HEIGHT]) } else emptyList()
             val bloodPressureData = if (HealthDataType.BLOOD_PRESSURE in enabledTypes)
-                readSafe { readBloodPressureData(startTime, endTime, lastSyncTimestamps[HealthDataType.BLOOD_PRESSURE]) } else emptyList()
+                readSafe("BLOOD_PRESSURE") { readBloodPressureData(startTime, endTime, lastSyncTimestamps[HealthDataType.BLOOD_PRESSURE]) } else emptyList()
             val bloodGlucoseData = if (HealthDataType.BLOOD_GLUCOSE in enabledTypes)
-                readSafe { readBloodGlucoseData(startTime, endTime, lastSyncTimestamps[HealthDataType.BLOOD_GLUCOSE]) } else emptyList()
+                readSafe("BLOOD_GLUCOSE") { readBloodGlucoseData(startTime, endTime, lastSyncTimestamps[HealthDataType.BLOOD_GLUCOSE]) } else emptyList()
             val oxygenSaturationData = if (HealthDataType.OXYGEN_SATURATION in enabledTypes)
-                readSafe { readOxygenSaturationData(startTime, endTime, lastSyncTimestamps[HealthDataType.OXYGEN_SATURATION]) } else emptyList()
+                readSafe("OXYGEN_SAT") { readOxygenSaturationData(startTime, endTime, lastSyncTimestamps[HealthDataType.OXYGEN_SATURATION]) } else emptyList()
             val bodyTemperatureData = if (HealthDataType.BODY_TEMPERATURE in enabledTypes)
-                readSafe { readBodyTemperatureData(startTime, endTime, lastSyncTimestamps[HealthDataType.BODY_TEMPERATURE]) } else emptyList()
+                readSafe("BODY_TEMP") { readBodyTemperatureData(startTime, endTime, lastSyncTimestamps[HealthDataType.BODY_TEMPERATURE]) } else emptyList()
             val skinTemperatureData = if (HealthDataType.SKIN_TEMPERATURE in enabledTypes)
-                readSafe { readSkinTemperatureData(startTime, endTime, lastSyncTimestamps[HealthDataType.SKIN_TEMPERATURE]) } else emptyList()
+                readSafe("SKIN_TEMP") { readSkinTemperatureData(startTime, endTime, lastSyncTimestamps[HealthDataType.SKIN_TEMPERATURE]) } else emptyList()
             val respiratoryRateData = if (HealthDataType.RESPIRATORY_RATE in enabledTypes)
-                readSafe { readRespiratoryRateData(startTime, endTime, lastSyncTimestamps[HealthDataType.RESPIRATORY_RATE]) } else emptyList()
+                readSafe("RESP_RATE") { readRespiratoryRateData(startTime, endTime, lastSyncTimestamps[HealthDataType.RESPIRATORY_RATE]) } else emptyList()
             val restingHeartRateData = if (HealthDataType.RESTING_HEART_RATE in enabledTypes)
-                readSafe { readRestingHeartRateData(startTime, endTime, lastSyncTimestamps[HealthDataType.RESTING_HEART_RATE]) } else emptyList()
+                readSafe("RESTING_HR") { readRestingHeartRateData(startTime, endTime, lastSyncTimestamps[HealthDataType.RESTING_HEART_RATE]) } else emptyList()
             val exerciseData = if (HealthDataType.EXERCISE in enabledTypes)
-                readSafe { readExerciseData(
+                readSafe("EXERCISE") { readExerciseData(
                     startTime,
                     endTime,
                     lastSyncTimestamps[HealthDataType.EXERCISE],
@@ -341,19 +341,19 @@ class HealthConnectManager(private val context: Context) {
                     HealthDataType.STEPS in enabledTypes
                 ) } else emptyList()
             val hydrationData = if (HealthDataType.HYDRATION in enabledTypes)
-                readSafe { readHydrationData(startTime, endTime, lastSyncTimestamps[HealthDataType.HYDRATION]) } else emptyList()
+                readSafe("HYDRATION") { readHydrationData(startTime, endTime, lastSyncTimestamps[HealthDataType.HYDRATION]) } else emptyList()
             val nutritionData = if (HealthDataType.NUTRITION in enabledTypes)
-                readSafe { readNutritionData(startTime, endTime, lastSyncTimestamps[HealthDataType.NUTRITION]) } else emptyList()
+                readSafe("NUTRITION") { readNutritionData(startTime, endTime, lastSyncTimestamps[HealthDataType.NUTRITION]) } else emptyList()
             val basalMetabolicRateData = if (HealthDataType.BASAL_METABOLIC_RATE in enabledTypes)
-                readSafe { readBasalMetabolicRateData(startTime, endTime, lastSyncTimestamps[HealthDataType.BASAL_METABOLIC_RATE]) } else emptyList()
+                readSafe("BMR") { readBasalMetabolicRateData(startTime, endTime, lastSyncTimestamps[HealthDataType.BASAL_METABOLIC_RATE]) } else emptyList()
             val bodyFatData = if (HealthDataType.BODY_FAT in enabledTypes)
-                readSafe { readBodyFatData(startTime, endTime, lastSyncTimestamps[HealthDataType.BODY_FAT]) } else emptyList()
+                readSafe("BODY_FAT") { readBodyFatData(startTime, endTime, lastSyncTimestamps[HealthDataType.BODY_FAT]) } else emptyList()
             val leanBodyMassData = if (HealthDataType.LEAN_BODY_MASS in enabledTypes)
-                readSafe { readLeanBodyMassData(startTime, endTime, lastSyncTimestamps[HealthDataType.LEAN_BODY_MASS]) } else emptyList()
+                readSafe("LEAN_MASS") { readLeanBodyMassData(startTime, endTime, lastSyncTimestamps[HealthDataType.LEAN_BODY_MASS]) } else emptyList()
             val vo2MaxData = if (HealthDataType.VO2_MAX in enabledTypes)
-                readSafe { readVo2MaxData(startTime, endTime, lastSyncTimestamps[HealthDataType.VO2_MAX]) } else emptyList()
+                readSafe("VO2_MAX") { readVo2MaxData(startTime, endTime, lastSyncTimestamps[HealthDataType.VO2_MAX]) } else emptyList()
             val boneMassData = if (HealthDataType.BONE_MASS in enabledTypes)
-                readSafe { readBoneMassData(startTime, endTime, lastSyncTimestamps[HealthDataType.BONE_MASS]) } else emptyList()
+                readSafe("BONE_MASS") { readBoneMassData(startTime, endTime, lastSyncTimestamps[HealthDataType.BONE_MASS]) } else emptyList()
 
             Result.success(HealthData(
                 steps = stepsData,
@@ -437,13 +437,11 @@ class HealthConnectManager(private val context: Context) {
             R.string.dashboard_sub_kcal_today,
         )
         HealthDataType.SLEEP -> {
-            val sessions = readSleepSessionsInRange(dayStart, dayEnd)
+            val duration = aggregateSleepDuration(dayStart, dayEnd)
             DashboardMetric(
                 type,
                 DashboardFormatter.formatDurationMinutes(
-                    DashboardFormatter.sumDurationsMinutes(
-                        sessions.map { Duration.between(it.startTime, it.endTime) },
-                    ),
+                    DashboardFormatter.sumDurationsMinutes(listOf(duration)),
                 ),
                 R.string.dashboard_sub_today,
             )
@@ -602,12 +600,12 @@ class HealthConnectManager(private val context: Context) {
         if (value != null) subtitleResId else R.string.dashboard_sub_no_data,
     )
 
-    private suspend fun readSleepSessionsInRange(startTime: Instant, endTime: Instant): List<SleepSessionRecord> {
-        val request = ReadRecordsRequest(
-            recordType = SleepSessionRecord::class,
+    private suspend fun aggregateSleepDuration(startTime: Instant, endTime: Instant): Duration {
+        val request = AggregateRequest(
+            metrics = setOf(SleepSessionRecord.SLEEP_DURATION_TOTAL),
             timeRangeFilter = TimeRangeFilter.between(startTime, endTime),
         )
-        return readAllRecords(request)
+        return aggregateRL(request)[SleepSessionRecord.SLEEP_DURATION_TOTAL] ?: Duration.ZERO
     }
 
     private suspend fun averageHeartRateBpm(startTime: Instant, endTime: Instant): Double? {
@@ -696,33 +694,14 @@ class HealthConnectManager(private val context: Context) {
         endTime: Instant,
         lastSync: Instant?
     ): List<SleepData> {
-        val request = ReadRecordsRequest(
-            recordType = SleepSessionRecord::class,
-            timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-        )
-
-        val response = readAllRecords(request)
-
-        return response
-            .filter { record ->
-                lastSync == null || record.endTime >= lastSync
+        val result = mutableListOf<SleepData>()
+        forEachDay(startTime, endTime, lastSync) { _, queryStart, queryEnd ->
+            val duration = aggregateSleepDuration(queryStart, queryEnd)
+            if (!duration.isZero) {
+                result.add(SleepData(sessionEndTime = queryEnd, duration = duration, stages = emptyList()))
             }
-            .map { record ->
-                val stages = record.stages.map { stage ->
-                    SleepStage(
-                        stage = stage.stage.toString(),
-                        startTime = stage.startTime,
-                        endTime = stage.endTime,
-                        duration = Duration.between(stage.startTime, stage.endTime)
-                    )
-                }
-
-                SleepData(
-                    sessionEndTime = record.endTime,
-                    duration = Duration.between(record.startTime, record.endTime),
-                    stages = stages
-                )
-            }
+        }
+        return result
     }
 
     private suspend fun readHeartRateData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<HeartRateData> {
@@ -1160,10 +1139,13 @@ class HealthConnectManager(private val context: Context) {
         return all
     }
 
-    private suspend fun <T> readSafe(block: suspend () -> List<T>): List<T> =
-        try { kotlinx.coroutines.withTimeoutOrNull(15_000L) { block() } ?: emptyList() }
+    private suspend fun <T> readSafe(label: String = "?", block: suspend () -> List<T>): List<T> =
+        try {
+            kotlinx.coroutines.withTimeoutOrNull(15_000L) { block() }
+                ?: run { android.util.Log.w("HCSync", "timeout: $label"); emptyList() }
+        }
         catch (e: CancellationException) { throw e }
-        catch (_: Exception) { emptyList() }
+        catch (e: Exception) { android.util.Log.w("HCSync", "error: $label — ${e.message}"); emptyList() }
 
     private suspend fun forEachDay(
         startTime: Instant,
