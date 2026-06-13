@@ -247,7 +247,7 @@ data class NutritionData(
 )
 
 data class BasalMetabolicRateData(
-    val watts: Double,
+    val kcalPerDay: Double,
     val time: Instant
 )
 
@@ -557,12 +557,10 @@ class HealthConnectManager(private val context: Context) {
             ),
             R.string.dashboard_sub_kcal_today,
         )
-        HealthDataType.BASAL_METABOLIC_RATE -> latestMetric(
-            type,
-            readBasalMetabolicRateData(dayStart, dayEnd, null).maxByOrNull { it.time }?.watts,
-            DashboardFormatter::formatWatts,
-            R.string.dashboard_sub_watts_latest,
-        )
+        HealthDataType.BASAL_METABOLIC_RATE -> {
+            val kcal = readBasalMetabolicRateData(dayStart, dayEnd, null).sumOf { it.kcalPerDay }.takeIf { it > 0.0 }
+            latestMetric(type, kcal, DashboardFormatter::formatCalories, R.string.dashboard_sub_kcal_today)
+        }
         HealthDataType.BODY_FAT -> latestMetric(
             type,
             readBodyFatData(dayStart, dayEnd, null).maxByOrNull { it.time }?.percentage,
@@ -923,32 +921,24 @@ class HealthConnectManager(private val context: Context) {
         includeDistance: Boolean,
         includeSteps: Boolean
     ): List<ExerciseData> {
-        val request = ReadRecordsRequest(recordType = ExerciseSessionRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.endTime >= lastSync }
-            .map {
-                val duration = Duration.between(it.startTime, it.endTime)
-                val distanceMeters = if (includeDistance) readDistanceTotal(it.startTime, it.endTime) else null
-                val steps = if (includeSteps) readStepsTotal(it.startTime, it.endTime) else null
-                val cadenceMetrics = if (includeSteps) readStepsCadenceMetrics(it.startTime, it.endTime) else StepsCadenceMetrics()
-                ExerciseData(
-                    type = it.exerciseType.toString(),
-                    startTime = it.startTime,
-                    endTime = it.endTime,
-                    duration = duration,
-                    distanceMeters = distanceMeters,
-                    steps = steps,
-                    avgCadenceSpm = cadenceMetrics.avg ?: deriveAverageCadenceSpm(steps, duration),
-                    maxCadenceSpm = cadenceMetrics.max,
-                    strideLengthMeters = deriveStrideLengthMeters(distanceMeters, steps)
-                )
+        val result = mutableListOf<ExerciseData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(ExerciseSessionRecord.EXERCISE_DURATION_TOTAL),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val duration = aggregateRL(request)[ExerciseSessionRecord.EXERCISE_DURATION_TOTAL]
+            if (duration != null && !duration.isZero) {
+                result.add(ExerciseData(
+                    type = "DAILY_TOTAL",
+                    startTime = dayStart,
+                    endTime = queryEnd,
+                    duration = duration
+                ))
             }
+        }
+        return result
     }
-
-    private data class StepsCadenceMetrics(
-        val avg: Double? = null,
-        val max: Double? = null
-    )
 
     private suspend fun aggregateSteps(startTime: Instant, endTime: Instant): Long {
         val request = AggregateRequest(
@@ -975,48 +965,6 @@ class HealthConnectManager(private val context: Context) {
             ?.inKilocalories ?: 0.0
     }
 
-    private suspend fun readStepsTotal(startTime: Instant, endTime: Instant): Long? {
-        val steps = aggregateSteps(startTime, endTime)
-        return steps.takeIf { it > 0L }
-    }
-
-    private suspend fun readStepsCadenceMetrics(startTime: Instant, endTime: Instant): StepsCadenceMetrics {
-        return try {
-            val request = AggregateRequest(
-                metrics = setOf(StepsCadenceRecord.RATE_AVG, StepsCadenceRecord.RATE_MAX),
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-            )
-            val response = aggregateRL(request)
-            StepsCadenceMetrics(
-                avg = response[StepsCadenceRecord.RATE_AVG]?.takeIf { it > 0.0 },
-                max = response[StepsCadenceRecord.RATE_MAX]?.takeIf { it > 0.0 }
-            )
-        } catch (_: Exception) {
-            // Cadence is optional. Keep exercise sync working on providers that expose steps but not cadence.
-            StepsCadenceMetrics()
-        }
-    }
-
-    private fun deriveAverageCadenceSpm(steps: Long?, duration: Duration): Double? {
-        if (steps == null || steps <= 0L || duration.isZero || duration.isNegative) {
-            return null
-        }
-        val durationMinutes = duration.toMillis() / 60000.0
-        return (steps.toDouble() / durationMinutes).takeIf { it > 0.0 }
-    }
-
-    private fun deriveStrideLengthMeters(distanceMeters: Double?, steps: Long?): Double? {
-        if (distanceMeters == null || distanceMeters <= 0.0 || steps == null || steps <= 0L) {
-            return null
-        }
-        return distanceMeters / steps.toDouble()
-    }
-
-    private suspend fun readDistanceTotal(startTime: Instant, endTime: Instant): Double? {
-        val distanceMeters = aggregateDistanceMeters(startTime, endTime)
-        return distanceMeters.takeIf { it > 0.0 }
-    }
-
     private suspend fun readHydrationData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<HydrationData> {
         val result = mutableListOf<HydrationData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
@@ -1031,30 +979,57 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readNutritionData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<NutritionData> {
-        val request = ReadRecordsRequest(recordType = NutritionRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.endTime >= lastSync }
-            .map {
-                NutritionData(
-                    calories = it.energy?.inKilocalories,
-                    protein = it.protein?.inGrams,
-                    carbs = it.totalCarbohydrate?.inGrams,
-                    fat = it.totalFat?.inGrams,
-                    sugar = it.sugar?.inGrams,
-                    sodium = it.sodium?.inGrams,
-                    dietaryFiber = it.dietaryFiber?.inGrams,
-                    name = it.name,
-                    startTime = it.startTime,
-                    endTime = it.endTime
-                )
+        val result = mutableListOf<NutritionData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(
+                    NutritionRecord.ENERGY_TOTAL,
+                    NutritionRecord.PROTEIN_TOTAL,
+                    NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL,
+                    NutritionRecord.TOTAL_FAT_TOTAL,
+                    NutritionRecord.SUGAR_TOTAL,
+                    NutritionRecord.SODIUM_TOTAL,
+                    NutritionRecord.DIETARY_FIBER_TOTAL,
+                ),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val response = aggregateRL(request)
+            val calories = response[NutritionRecord.ENERGY_TOTAL]?.inKilocalories
+            val protein = response[NutritionRecord.PROTEIN_TOTAL]?.inGrams
+            val carbs = response[NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL]?.inGrams
+            val fat = response[NutritionRecord.TOTAL_FAT_TOTAL]?.inGrams
+            val sugar = response[NutritionRecord.SUGAR_TOTAL]?.inGrams
+            val sodium = response[NutritionRecord.SODIUM_TOTAL]?.inGrams
+            val dietaryFiber = response[NutritionRecord.DIETARY_FIBER_TOTAL]?.inGrams
+            if (calories != null || protein != null || carbs != null || fat != null) {
+                result.add(NutritionData(
+                    calories = calories,
+                    protein = protein,
+                    carbs = carbs,
+                    fat = fat,
+                    sugar = sugar,
+                    sodium = sodium,
+                    dietaryFiber = dietaryFiber,
+                    name = null,
+                    startTime = dayStart,
+                    endTime = queryEnd
+                ))
             }
+        }
+        return result
     }
 
     private suspend fun readBasalMetabolicRateData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<BasalMetabolicRateData> {
-        val request = ReadRecordsRequest(recordType = BasalMetabolicRateRecord::class, timeRangeFilter = TimeRangeFilter.between(startTime, endTime))
-        val response = readAllRecords(request)
-        return response.filter { lastSync == null || it.time >= lastSync }
-            .map { BasalMetabolicRateData(it.basalMetabolicRate.inWatts, it.time) }
+        val result = mutableListOf<BasalMetabolicRateData>()
+        forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
+            val request = AggregateRequest(
+                metrics = setOf(BasalMetabolicRateRecord.BASAL_CALORIES_TOTAL),
+                timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
+            )
+            val kcal = aggregateRL(request)[BasalMetabolicRateRecord.BASAL_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+            if (kcal > 0.0) result.add(BasalMetabolicRateData(kcal, dayStart))
+        }
+        return result
     }
 
     private suspend fun readBodyFatData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<BodyFatData> {
