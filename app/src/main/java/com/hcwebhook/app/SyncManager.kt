@@ -644,7 +644,7 @@ class SyncManager(private val context: Context) {
             if (healthData.basalMetabolicRate.isNotEmpty()) {
                 putJsonArray("basal_metabolic_rate") {
                     healthData.basalMetabolicRate.forEach { add(buildJsonObject {
-                        put("watts", it.watts)
+                        put("kcal_per_day", it.kcalPerDay)
                         put("time", it.time.toString())
                     }) }
                 }
