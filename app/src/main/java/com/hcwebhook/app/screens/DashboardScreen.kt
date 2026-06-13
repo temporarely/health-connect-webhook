@@ -51,6 +51,7 @@ import com.hcwebhook.app.dashboard.DashboardMetricPresentation
 import com.hcwebhook.app.dashboard.DashboardSnapshot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 
 private data class DashboardMetricCard(
@@ -84,12 +85,18 @@ fun DashboardScreen(
     suspend fun loadStats() {
         isLoading = true
         loadError = false
-        val result = HealthConnectManager(context).readTodayDashboardStats(grantedPermissionsSet)
+        val result = withTimeoutOrNull(15_000) {
+            HealthConnectManager(context).readTodayDashboardStats(grantedPermissionsSet)
+        }
         isLoading = false
-        result.fold(
-            onSuccess = { snapshot = it },
-            onFailure = { loadError = true },
-        )
+        if (result == null) {
+            loadError = true
+        } else {
+            result.fold(
+                onSuccess = { snapshot = it },
+                onFailure = { loadError = true },
+            )
+        }
     }
 
     LaunchedEffect(canLoad, grantedPermissionsSet) {
