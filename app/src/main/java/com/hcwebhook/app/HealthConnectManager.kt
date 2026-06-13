@@ -758,9 +758,6 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readDistanceData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<DistanceData> {
-        // Aggregate distance per calendar day (same pattern as steps).
-        // If the aggregate returns null (e.g., Google Health/Fit data after the Fitbit rebrand),
-        // fall back to summing raw DistanceRecord entries so distance is never silently omitted.
         val zone = java.time.ZoneId.systemDefault()
         val result = mutableListOf<DistanceData>()
 
@@ -784,19 +781,7 @@ class HealthConnectManager(private val context: Context) {
                 metrics = setOf(DistanceRecord.DISTANCE_TOTAL),
                 timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
             )
-            val aggregateResponse = aggregateRL(aggregateRequest)
-            val aggregateMeters = aggregateResponse[DistanceRecord.DISTANCE_TOTAL]?.inMeters
-
-            val dayDistance: Double = if (aggregateMeters != null && aggregateMeters > 0.0) {
-                aggregateMeters
-            } else {
-                // Aggregate returned null or zero — fall back to raw records.
-                val rawRequest = ReadRecordsRequest(
-                    recordType = DistanceRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
-                )
-                readAllRecords(rawRequest).sumOf { it.distance.inMeters }
-            }
+            val dayDistance = aggregateRL(aggregateRequest)[DistanceRecord.DISTANCE_TOTAL]?.inMeters ?: 0.0
 
             if (dayDistance > 0.0) {
                 result.add(DistanceData(
@@ -813,7 +798,6 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readActiveCaloriesData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<ActiveCaloriesData> {
-        // Aggregate active calories per calendar day (same pattern as steps/distance)
         val zone = java.time.ZoneId.systemDefault()
         val result = mutableListOf<ActiveCaloriesData>()
 
@@ -837,19 +821,7 @@ class HealthConnectManager(private val context: Context) {
                 metrics = setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
                 timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
             )
-            val aggregateResponse = aggregateRL(aggregateRequest)
-            val aggregateKcal = aggregateResponse[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories
-
-            val dayCalories: Double = if (aggregateKcal != null && aggregateKcal > 0.0) {
-                aggregateKcal
-            } else {
-                // Aggregate returned null — fall back to summing raw records.
-                val rawRequest = ReadRecordsRequest(
-                    recordType = ActiveCaloriesBurnedRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
-                )
-                readAllRecords(rawRequest).sumOf { it.energy.inKilocalories }
-            }
+            val dayCalories = aggregateRL(aggregateRequest)[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
 
             if (dayCalories > 0.0) {
                 result.add(ActiveCaloriesData(
