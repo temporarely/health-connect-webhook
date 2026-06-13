@@ -141,6 +141,9 @@ data class SleepStage(
 
 data class HeartRateData(
     val bpm: Long,
+    val bpmMin: Long,
+    val bpmMax: Long,
+    val measurementsCount: Long,
     val time: Instant
 )
 
@@ -706,11 +709,23 @@ class HealthConnectManager(private val context: Context) {
         val result = mutableListOf<HeartRateData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
-                metrics = setOf(HeartRateRecord.BPM_AVG),
+                metrics = setOf(
+                    HeartRateRecord.BPM_AVG,
+                    HeartRateRecord.BPM_MIN,
+                    HeartRateRecord.BPM_MAX,
+                    HeartRateRecord.MEASUREMENTS_COUNT,
+                ),
                 timeRangeFilter = TimeRangeFilter.between(queryStart, queryEnd)
             )
-            val bpm = aggregateRL(request)[HeartRateRecord.BPM_AVG]
-            if (bpm != null && bpm > 0L) result.add(HeartRateData(bpm, dayStart))
+            val response = aggregateRL(request)
+            val bpm = response[HeartRateRecord.BPM_AVG]
+            if (bpm != null && bpm > 0L) result.add(HeartRateData(
+                bpm = bpm,
+                bpmMin = response[HeartRateRecord.BPM_MIN] ?: bpm,
+                bpmMax = response[HeartRateRecord.BPM_MAX] ?: bpm,
+                measurementsCount = response[HeartRateRecord.MEASUREMENTS_COUNT] ?: 1L,
+                time = dayStart,
+            ))
         }
         return result
     }

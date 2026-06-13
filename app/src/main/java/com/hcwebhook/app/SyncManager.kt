@@ -460,6 +460,9 @@ class SyncManager(private val context: Context) {
                 putJsonArray("heart_rate") {
                     healthData.heartRate.forEach { add(buildJsonObject {
                         put("bpm", it.bpm)
+                        put("bpm_min", it.bpmMin)
+                        put("bpm_max", it.bpmMax)
+                        put("measurements_count", it.measurementsCount)
                         put("time", it.time.toString())
                     }) }
                 }
