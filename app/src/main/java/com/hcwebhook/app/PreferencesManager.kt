@@ -44,6 +44,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_LOCAL_HTTP_AUTH_ENABLED = "local_http_auth_enabled"
         private const val KEY_LOCAL_HTTP_TOKEN = "local_http_token"
         private const val KEY_NOTIFICATION_CONFIGS = "notification_configs"
+        private const val KEY_USE_RAW_RECORDS = "use_raw_records"
     }
 
 
@@ -346,6 +347,12 @@ class PreferencesManager(context: Context) {
     fun setNotificationConfigs(configs: List<NotificationConfig>) {
         val configsJson = Json.encodeToString(configs)
         prefs.edit().putString(KEY_NOTIFICATION_CONFIGS, configsJson).apply()
+    }
+
+    fun isUseRawRecordsEnabled(): Boolean = prefs.getBoolean(KEY_USE_RAW_RECORDS, false)
+
+    fun setUseRawRecordsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_USE_RAW_RECORDS, enabled).apply()
     }
 
     // -------------------------------------------------------------------------

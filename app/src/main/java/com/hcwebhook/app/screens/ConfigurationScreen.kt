@@ -78,6 +78,7 @@ fun ConfigurationScreen(
 
     var showDataTypesSheet by remember { mutableStateOf(false) }
     var showPermissionsSheet by remember { mutableStateOf(false) }
+    var useRawRecords by remember { mutableStateOf(preferencesManager.isUseRawRecordsEnabled()) }
 
     var lastSyncTime by remember { mutableStateOf(preferencesManager.getLastSyncTime()) }
     var lastSyncSummary by remember { mutableStateOf(preferencesManager.getLastSyncSummary()) }
@@ -455,6 +456,27 @@ fun ConfigurationScreen(
                 lastSyncTime = preferencesManager.getLastSyncTime()
                 lastSyncSummary = preferencesManager.getLastSyncSummary()
             })
+
+            // ── Advanced ──────────────────────────────────────────────────────
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(stringResource(R.string.config_raw_records_title), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.config_raw_records_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = useRawRecords,
+                        onCheckedChange = {
+                            useRawRecords = it
+                            preferencesManager.setUseRawRecordsEnabled(it)
+                        }
+                    )
+                }
+            }
         }
 
         if (showPermissionsSheet) {

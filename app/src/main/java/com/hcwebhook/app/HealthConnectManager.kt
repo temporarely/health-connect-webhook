@@ -653,9 +653,15 @@ class HealthConnectManager(private val context: Context) {
         endTime: Instant,
         lastSync: Instant?
     ): List<StepsData> {
-        // Aggregate steps per calendar day (using device timezone) instead of
-        // a single multi-day total. This produces clean per-day records that
-        // the server can use directly without delta-tracking hacks.
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = StepsRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.endTime >= lastSync }
+                .map { StepsData(it.count, it.startTime, it.endTime) }
+        }
         val zone = java.time.ZoneId.systemDefault()
         val result = mutableListOf<StepsData>()
 
@@ -702,6 +708,28 @@ class HealthConnectManager(private val context: Context) {
         endTime: Instant,
         lastSync: Instant?
     ): List<SleepData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = SleepSessionRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.endTime >= lastSync }
+                .map { record ->
+                    SleepData(
+                        sessionEndTime = record.endTime,
+                        duration = Duration.between(record.startTime, record.endTime),
+                        stages = record.stages.map { stage ->
+                            SleepStage(
+                                stage = stage.stage.toString(),
+                                startTime = stage.startTime,
+                                endTime = stage.endTime,
+                                duration = Duration.between(stage.startTime, stage.endTime)
+                            )
+                        }
+                    )
+                }
+        }
         val result = mutableListOf<SleepData>()
         forEachDay(startTime, endTime, lastSync) { _, queryStart, queryEnd ->
             val duration = aggregateSleepDuration(queryStart, queryEnd)
@@ -713,6 +741,25 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readHeartRateData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<HeartRateData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = HeartRateRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request).flatMap { record ->
+                record.samples
+                    .filter { lastSync == null || it.time >= lastSync }
+                    .map { sample ->
+                        HeartRateData(
+                            bpm = sample.beatsPerMinute,
+                            bpmMin = sample.beatsPerMinute,
+                            bpmMax = sample.beatsPerMinute,
+                            measurementsCount = 1L,
+                            time = sample.time
+                        )
+                    }
+            }
+        }
         val result = mutableListOf<HeartRateData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -745,6 +792,15 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readDistanceData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<DistanceData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = DistanceRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.endTime >= lastSync }
+                .map { DistanceData(it.distance.inMeters, it.startTime, it.endTime) }
+        }
         val zone = java.time.ZoneId.systemDefault()
         val result = mutableListOf<DistanceData>()
 
@@ -785,6 +841,15 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readActiveCaloriesData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<ActiveCaloriesData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = ActiveCaloriesBurnedRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.endTime >= lastSync }
+                .map { ActiveCaloriesData(it.energy.inKilocalories, it.startTime, it.endTime) }
+        }
         val zone = java.time.ZoneId.systemDefault()
         val result = mutableListOf<ActiveCaloriesData>()
 
@@ -825,6 +890,15 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readTotalCaloriesData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<TotalCaloriesData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = TotalCaloriesBurnedRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.endTime >= lastSync }
+                .map { TotalCaloriesData(it.energy.inKilocalories, it.startTime, it.endTime) }
+        }
         val result = mutableListOf<TotalCaloriesData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -838,6 +912,15 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readWeightData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<WeightData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = WeightRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.time >= lastSync }
+                .map { WeightData(it.weight.inKilograms, it.time) }
+        }
         val result = mutableListOf<WeightData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -851,6 +934,15 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readHeightData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<HeightData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = HeightRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.time >= lastSync }
+                .map { HeightData(it.height.inMeters, it.time) }
+        }
         val result = mutableListOf<HeightData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -864,6 +956,15 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readBloodPressureData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<BloodPressureData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = BloodPressureRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.time >= lastSync }
+                .map { BloodPressureData(it.systolic.inMillimetersOfMercury, it.diastolic.inMillimetersOfMercury, it.time) }
+        }
         val result = mutableListOf<BloodPressureData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -924,6 +1025,15 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readRestingHeartRateData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<RestingHeartRateData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = RestingHeartRateRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.time >= lastSync }
+                .map { RestingHeartRateData(it.beatsPerMinute, it.time) }
+        }
         val result = mutableListOf<RestingHeartRateData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -943,6 +1053,25 @@ class HealthConnectManager(private val context: Context) {
         includeDistance: Boolean,
         includeSteps: Boolean
     ): List<ExerciseData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = ExerciseSessionRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.endTime >= lastSync }
+                .map { session ->
+                    val typeStr = ExerciseSessionRecord.EXERCISE_TYPE_STRING_TO_INT_MAP.entries
+                        .firstOrNull { it.value == session.exerciseType }?.key
+                        ?: "type_${session.exerciseType}"
+                    ExerciseData(
+                        type = typeStr,
+                        startTime = session.startTime,
+                        endTime = session.endTime,
+                        duration = Duration.between(session.startTime, session.endTime),
+                    )
+                }
+        }
         val result = mutableListOf<ExerciseData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -988,6 +1117,15 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readHydrationData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<HydrationData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = HydrationRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.endTime >= lastSync }
+                .map { HydrationData(it.volume.inLiters, it.startTime, it.endTime) }
+        }
         val result = mutableListOf<HydrationData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -1001,6 +1139,28 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readNutritionData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<NutritionData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = NutritionRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.endTime >= lastSync }
+                .map { record ->
+                    NutritionData(
+                        calories = record.energy?.inKilocalories,
+                        protein = record.protein?.inGrams,
+                        carbs = record.totalCarbohydrate?.inGrams,
+                        fat = record.totalFat?.inGrams,
+                        sugar = record.sugar?.inGrams,
+                        sodium = record.sodium?.inGrams,
+                        dietaryFiber = record.dietaryFiber?.inGrams,
+                        name = record.name,
+                        startTime = record.startTime,
+                        endTime = record.endTime
+                    )
+                }
+        }
         val result = mutableListOf<NutritionData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -1042,6 +1202,15 @@ class HealthConnectManager(private val context: Context) {
     }
 
     private suspend fun readBasalMetabolicRateData(startTime: Instant, endTime: Instant, lastSync: Instant?): List<BasalMetabolicRateData> {
+        if (useRawRecords()) {
+            val request = ReadRecordsRequest(
+                recordType = BasalMetabolicRateRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            return readAllRecords(request)
+                .filter { lastSync == null || it.time >= lastSync }
+                .map { BasalMetabolicRateData(it.basalMetabolicRate.inKilocaloriesPerDay, it.time) }
+        }
         val result = mutableListOf<BasalMetabolicRateData>()
         forEachDay(startTime, endTime, lastSync) { dayStart, queryStart, queryEnd ->
             val request = AggregateRequest(
@@ -1135,6 +1304,8 @@ class HealthConnectManager(private val context: Context) {
         } while (token != null)
         return all
     }
+
+    private fun useRawRecords() = PreferencesManager(context).isUseRawRecordsEnabled()
 
     private suspend fun <T> readSafe(label: String = "?", block: suspend () -> List<T>): List<T> =
         try {

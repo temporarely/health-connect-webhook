@@ -321,6 +321,10 @@
     <string name="about_notifications_desc">Configure Gotify, ntfy, Telegram, Discord, Pushover</string>
     <string name="webhooks_notification_section">Notify on Success/Failure</string>
     <string name="webhooks_notification_none">None</string>
+
+    <!-- Advanced / debug -->
+    <string name="config_raw_records_title">Use Raw Records API</string>
+    <string name="config_raw_records_desc">Use readRecords instead of aggregate for all data types. Restores per-session and per-meal detail but may hang on some devices.</string>
 </resources>
 
 
