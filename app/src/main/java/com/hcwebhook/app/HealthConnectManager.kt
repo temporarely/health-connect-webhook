@@ -393,8 +393,9 @@ class HealthConnectManager(private val context: Context) {
 
     suspend fun readTodayDashboardStats(grantedPermissions: Set<String>): Result<DashboardSnapshot> {
         return try {
-            val grantedTypes = grantedDataTypes(grantedPermissions)
-            if (grantedTypes.isEmpty()) {
+            val enabledTypes = PreferencesManager(context).getEnabledDataTypes()
+            val typesToLoad = grantedDataTypes(grantedPermissions).filter { it in enabledTypes }
+            if (typesToLoad.isEmpty()) {
                 return Result.success(DashboardSnapshot(emptyList()))
             }
 
@@ -402,8 +403,14 @@ class HealthConnectManager(private val context: Context) {
             val dayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant()
             val dayEnd = Instant.now()
 
-            val metrics = grantedTypes.map { type ->
-                readDashboardMetric(type, dayStart, dayEnd)
+            val metrics = typesToLoad.map { type ->
+                try {
+                    readDashboardMetric(type, dayStart, dayEnd)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    DashboardMetric(type, DashboardFormatter.NO_DATA, R.string.dashboard_sub_no_data)
+                }
             }
 
             Result.success(DashboardSnapshot(metrics, Instant.now()))
