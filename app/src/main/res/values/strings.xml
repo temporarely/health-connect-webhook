@@ -325,6 +325,16 @@
     <!-- Advanced / debug -->
     <string name="config_raw_records_title">Use Raw Records API</string>
     <string name="config_raw_records_desc">Use readRecords instead of aggregate for all data types. Restores per-session and per-meal detail but may hang on some devices.</string>
+
+    <!-- Data source selector -->
+    <string name="config_data_source_title">Data Source</string>
+    <string name="config_data_source_desc">Choose where health data is read from.</string>
+    <string name="data_source_hc_agg">HC Aggregated</string>
+    <string name="data_source_hc_raw">HC Raw</string>
+    <string name="data_source_samsung">Samsung Health</string>
+    <string name="data_source_hc_agg_desc">Health Connect — aggregated daily totals (default).</string>
+    <string name="data_source_hc_raw_desc">Health Connect — raw per-session records; more detail but may be slower.</string>
+    <string name="data_source_samsung_desc">Samsung Health direct — reads data via Samsung Health IPC, bypassing Health Connect. Requires Samsung Health app.</string>
 </resources>
 
 

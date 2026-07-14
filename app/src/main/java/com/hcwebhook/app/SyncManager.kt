@@ -25,6 +25,7 @@ class SyncManager(private val context: Context) {
 
     private val preferencesManager = PreferencesManager(context)
     private val healthConnectManager = HealthConnectManager(context)
+    private val samsungHealthManager = SamsungHealthManager(context)
 
     suspend fun getRealtimeJsonPayload(
         timeRangeDays: Int? = null,
@@ -38,13 +39,24 @@ class SyncManager(private val context: Context) {
             }
 
             // Fresh read: do not use last sync timestamps
-            val healthDataResult = healthConnectManager.readHealthData(
-                enabledTypes = enabledTypes,
-                lastSyncTimestamps = emptyMap(),
-                timeRangeDays = timeRangeDays,
-                start = start,
-                end = end
-            )
+            val dataSource = preferencesManager.getDataSource()
+            val healthDataResult = if (dataSource == DataSource.SAMSUNG_HEALTH) {
+                samsungHealthManager.readHealthData(
+                    enabledTypes = enabledTypes,
+                    lastSyncTimestamps = emptyMap(),
+                    timeRangeDays = timeRangeDays,
+                    start = start,
+                    end = end
+                )
+            } else {
+                healthConnectManager.readHealthData(
+                    enabledTypes = enabledTypes,
+                    lastSyncTimestamps = emptyMap(),
+                    timeRangeDays = timeRangeDays,
+                    start = start,
+                    end = end
+                )
+            }
             if (healthDataResult.isFailure) {
                 return@withContext Result.failure(
                     healthDataResult.exceptionOrNull() ?: Exception("Failed to read health data")
@@ -95,13 +107,24 @@ class SyncManager(private val context: Context) {
             }
 
             // Read health data
-            val healthDataResult = healthConnectManager.readHealthData(
-                enabledTypes = enabledTypes,
-                lastSyncTimestamps = lastSyncTimestamps,
-                timeRangeDays = timeRangeDays,
-                start = start,
-                end = end
-            )
+            val dataSource = preferencesManager.getDataSource()
+            val healthDataResult = if (dataSource == DataSource.SAMSUNG_HEALTH) {
+                samsungHealthManager.readHealthData(
+                    enabledTypes = enabledTypes,
+                    lastSyncTimestamps = lastSyncTimestamps,
+                    timeRangeDays = timeRangeDays,
+                    start = start,
+                    end = end
+                )
+            } else {
+                healthConnectManager.readHealthData(
+                    enabledTypes = enabledTypes,
+                    lastSyncTimestamps = lastSyncTimestamps,
+                    timeRangeDays = timeRangeDays,
+                    start = start,
+                    end = end
+                )
+            }
             if (healthDataResult.isFailure) {
                 return@withContext Result.failure(healthDataResult.exceptionOrNull() ?: Exception("Failed to read health data"))
             }

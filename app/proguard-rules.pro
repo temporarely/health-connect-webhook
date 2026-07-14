@@ -1,4 +1,16 @@
 # Add project specific ProGuard rules here.
+
+# Samsung Health SDK IPC classes — class names are looked up at runtime via
+# Class.forName() from Bundle.getParcelable(), so they must not be renamed.
+-keep class com.samsung.android.sdk.healthdata.HealthDataResolver { *; }
+-keep class com.samsung.android.sdk.healthdata.HealthDataResolver$ReadResult { *; }
+-keep class com.samsung.android.sdk.internal.healthdata.HealthResultReceiver { *; }
+-keep class com.samsung.android.sdk.internal.healthdata.ReadRequestImpl { *; }
+
+# Keep the CREATOR fields required by Android's Parcelable reflection.
+-keepclassmembers class com.samsung.android.sdk.** {
+    public static final android.os.Parcelable$Creator CREATOR;
+}
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 #

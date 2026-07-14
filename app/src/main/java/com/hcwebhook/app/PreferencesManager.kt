@@ -10,6 +10,12 @@ enum class SyncMode {
     SCHEDULED    // Sync at specific times (morning & evening)
 }
 
+enum class DataSource {
+    HEALTH_CONNECT_AGGREGATED,
+    HEALTH_CONNECT_RAW,
+    SAMSUNG_HEALTH
+}
+
 class PreferencesManager(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -45,6 +51,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_LOCAL_HTTP_TOKEN = "local_http_token"
         private const val KEY_NOTIFICATION_CONFIGS = "notification_configs"
         private const val KEY_USE_RAW_RECORDS = "use_raw_records"
+        private const val KEY_DATA_SOURCE = "data_source"
     }
 
 
@@ -349,10 +356,27 @@ class PreferencesManager(context: Context) {
         prefs.edit().putString(KEY_NOTIFICATION_CONFIGS, configsJson).apply()
     }
 
-    fun isUseRawRecordsEnabled(): Boolean = prefs.getBoolean(KEY_USE_RAW_RECORDS, false)
+    fun getDataSource(): DataSource {
+        val saved = prefs.getString(KEY_DATA_SOURCE, null)
+        if (saved != null) {
+            return try { DataSource.valueOf(saved) } catch (_: Exception) { DataSource.HEALTH_CONNECT_AGGREGATED }
+        }
+        // Backward compat: derive from legacy use_raw_records flag
+        return if (prefs.getBoolean(KEY_USE_RAW_RECORDS, false)) DataSource.HEALTH_CONNECT_RAW
+        else DataSource.HEALTH_CONNECT_AGGREGATED
+    }
+
+    fun setDataSource(source: DataSource) {
+        prefs.edit()
+            .putString(KEY_DATA_SOURCE, source.name)
+            .putBoolean(KEY_USE_RAW_RECORDS, source == DataSource.HEALTH_CONNECT_RAW)
+            .apply()
+    }
+
+    fun isUseRawRecordsEnabled(): Boolean = getDataSource() == DataSource.HEALTH_CONNECT_RAW
 
     fun setUseRawRecordsEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_USE_RAW_RECORDS, enabled).apply()
+        setDataSource(if (enabled) DataSource.HEALTH_CONNECT_RAW else DataSource.HEALTH_CONNECT_AGGREGATED)
     }
 
     // -------------------------------------------------------------------------

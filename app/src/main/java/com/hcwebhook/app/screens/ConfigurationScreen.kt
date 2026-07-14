@@ -78,7 +78,7 @@ fun ConfigurationScreen(
 
     var showDataTypesSheet by remember { mutableStateOf(false) }
     var showPermissionsSheet by remember { mutableStateOf(false) }
-    var useRawRecords by remember { mutableStateOf(preferencesManager.isUseRawRecordsEnabled()) }
+    var dataSource by remember { mutableStateOf(preferencesManager.getDataSource()) }
 
     var lastSyncTime by remember { mutableStateOf(preferencesManager.getLastSyncTime()) }
     var lastSyncSummary by remember { mutableStateOf(preferencesManager.getLastSyncSummary()) }
@@ -457,23 +457,47 @@ fun ConfigurationScreen(
                 lastSyncSummary = preferencesManager.getLastSyncSummary()
             })
 
-            // ── Advanced ──────────────────────────────────────────────────────
+            // ── Data source ───────────────────────────────────────────────────
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(stringResource(R.string.config_raw_records_title), style = MaterialTheme.typography.titleSmall)
-                        Text(stringResource(R.string.config_raw_records_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(
-                        checked = useRawRecords,
-                        onCheckedChange = {
-                            useRawRecords = it
-                            preferencesManager.setUseRawRecordsEnabled(it)
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(stringResource(R.string.config_data_source_title), style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        stringResource(R.string.config_data_source_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        val sources = DataSource.values()
+                        sources.forEachIndexed { idx, source ->
+                            SegmentedButton(
+                                selected = dataSource == source,
+                                onClick = {
+                                    dataSource = source
+                                    preferencesManager.setDataSource(source)
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index = idx, count = sources.size)
+                            ) {
+                                Text(
+                                    text = when (source) {
+                                        DataSource.HEALTH_CONNECT_AGGREGATED -> stringResource(R.string.data_source_hc_agg)
+                                        DataSource.HEALTH_CONNECT_RAW -> stringResource(R.string.data_source_hc_raw)
+                                        DataSource.SAMSUNG_HEALTH -> stringResource(R.string.data_source_samsung)
+                                    },
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = when (dataSource) {
+                            DataSource.HEALTH_CONNECT_AGGREGATED -> stringResource(R.string.data_source_hc_agg_desc)
+                            DataSource.HEALTH_CONNECT_RAW -> stringResource(R.string.data_source_hc_raw_desc)
+                            DataSource.SAMSUNG_HEALTH -> stringResource(R.string.data_source_samsung_desc)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
