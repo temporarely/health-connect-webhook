@@ -5,7 +5,7 @@ plugins {
 }
 
 val appVersionMajor = 1
-val appVersionMinor = 14
+val appVersionMinor = 2
 val appVersionPatch = 0
 val appVersionCode = (appVersionMajor * 10000) + (appVersionMinor * 100) + appVersionPatch
 val appVersionName = "$appVersionMajor.$appVersionMinor.$appVersionPatch"
