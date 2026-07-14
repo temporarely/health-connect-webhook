@@ -8,6 +8,7 @@ import com.samsung.android.sdk.internal.healthdata.AggregateRequestImpl;
 import com.samsung.android.sdk.internal.healthdata.HealthResultReceiver;
 
 import android.content.Intent;
+import android.os.ParcelFileDescriptor;
 
 /** {@hide} */
 interface IDataResolver {

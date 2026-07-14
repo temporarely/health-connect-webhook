@@ -4,6 +4,7 @@ import com.samsung.android.sdk.healthdata.IDataResolver;
 import com.samsung.android.sdk.healthdata.IDataWatcher;
 import com.samsung.android.sdk.healthdata.IDeviceManager;
 import com.samsung.android.sdk.internal.healthdata.HealthResultReceiver;
+import android.content.Intent;
 
 /** {@hide} */
 interface IHealth {
