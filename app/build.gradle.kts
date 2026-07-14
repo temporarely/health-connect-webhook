@@ -4,8 +4,8 @@ plugins {
     alias(libs.plugins.kotlinx.serialization)
 }
 
-val appVersionMajor = 1
-val appVersionMinor = 2
+val appVersionMajor = 2
+val appVersionMinor = 0
 val appVersionPatch = 0
 val appVersionCode = (appVersionMajor * 10000) + (appVersionMinor * 100) + appVersionPatch
 val appVersionName = "$appVersionMajor.$appVersionMinor.$appVersionPatch"
