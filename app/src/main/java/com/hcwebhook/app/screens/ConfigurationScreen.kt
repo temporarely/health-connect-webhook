@@ -4,6 +4,8 @@ import android.app.TimePickerDialog
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -76,9 +78,44 @@ fun ConfigurationScreen(
     var scheduledSyncs by remember { mutableStateOf(preferencesManager.getScheduledSyncs()) }
     var enabledDataTypes by remember { mutableStateOf(preferencesManager.getEnabledDataTypes()) }
 
+    val scope = rememberCoroutineScope()
     var showDataTypesSheet by remember { mutableStateOf(false) }
     var showPermissionsSheet by remember { mutableStateOf(false) }
     var dataSource by remember { mutableStateOf(preferencesManager.getDataSource()) }
+
+    // Samsung Health permission state: null=unchecked, true=all granted, false=missing
+    var shPermissionsGranted by remember { mutableStateOf<Boolean?>(null) }
+    var shPermissionIntent by remember { mutableStateOf<Intent?>(null) }
+
+    fun checkSamsungHealthPermissions() {
+        shPermissionsGranted = null
+        shPermissionIntent = null
+        scope.launch {
+            val intent = SamsungHealthManager(context)
+                .getPermissionRequestIntentIfNeeded(preferencesManager.getEnabledDataTypes())
+            if (intent == null) {
+                shPermissionsGranted = true
+            } else {
+                shPermissionsGranted = false
+                shPermissionIntent = intent
+            }
+        }
+    }
+
+    val shPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        checkSamsungHealthPermissions()
+    }
+
+    LaunchedEffect(dataSource) {
+        if (dataSource == DataSource.SAMSUNG_HEALTH) {
+            checkSamsungHealthPermissions()
+        } else {
+            shPermissionsGranted = null
+            shPermissionIntent = null
+        }
+    }
 
     var lastSyncTime by remember { mutableStateOf(preferencesManager.getLastSyncTime()) }
     var lastSyncSummary by remember { mutableStateOf(preferencesManager.getLastSyncSummary()) }
@@ -499,6 +536,41 @@ fun ConfigurationScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (dataSource == DataSource.SAMSUNG_HEALTH) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        when (val granted = shPermissionsGranted) {
+                            null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Text(stringResource(R.string.sh_perm_checking), style = MaterialTheme.typography.bodySmall)
+                            }
+                            true -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
+                                Text(stringResource(R.string.sh_perm_granted), style = MaterialTheme.typography.bodySmall, color = Color(0xFF4CAF50))
+                            }
+                            false -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                        Text(stringResource(R.string.sh_perm_missing), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                    }
+                                    val intent = shPermissionIntent
+                                    if (intent != null) {
+                                        TextButton(onClick = { shPermissionLauncher.launch(intent) }) {
+                                            Text(stringResource(R.string.sh_perm_grant), style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    } else {
+                                        TextButton(onClick = { checkSamsungHealthPermissions() }) {
+                                            Text(stringResource(R.string.sh_perm_recheck), style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

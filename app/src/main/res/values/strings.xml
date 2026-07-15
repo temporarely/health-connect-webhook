@@ -335,6 +335,11 @@
     <string name="data_source_hc_agg_desc">Health Connect — aggregated daily totals (default).</string>
     <string name="data_source_hc_raw_desc">Health Connect — raw per-session records; more detail but may be slower.</string>
     <string name="data_source_samsung_desc">Samsung Health direct — reads data via Samsung Health IPC, bypassing Health Connect. Requires Samsung Health app.</string>
+    <string name="sh_perm_checking">Checking Samsung Health permissions…</string>
+    <string name="sh_perm_granted">Samsung Health permissions granted</string>
+    <string name="sh_perm_missing">Samsung Health permissions missing</string>
+    <string name="sh_perm_grant">Grant</string>
+    <string name="sh_perm_recheck">Recheck</string>
 </resources>
 
 

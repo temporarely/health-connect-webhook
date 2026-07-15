@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import com.samsung.android.sdk.healthdata.HealthDataResolver
+import com.samsung.android.sdk.healthdata.HealthPermissionManager
 import com.samsung.android.sdk.healthdata.IHealth
 import com.samsung.android.sdk.healthdata.IDataResolver
 import com.samsung.android.sdk.internal.healthdata.HealthResultReceiver
@@ -365,7 +366,119 @@ class SamsungHealthManager(private val context: Context) {
         }
     }
 
-    // ── Service binding ───────────────────────────────────────────────────────
+    // ── Permission check / request ────────────────────────────────────────────
+
+    suspend fun getPermissionRequestIntentIfNeeded(enabledTypes: Set<HealthDataType>): Intent? = withContext(Dispatchers.IO) {
+        val dataTypes = enabledTypes.map { it.toSamsungType() }.filterNotNull().distinct()
+        if (dataTypes.isEmpty()) return@withContext null
+
+        val conn = SamsungHealthIHealthConnection()
+        try {
+            val health = conn.connect() ?: return@withContext null
+            val bundle = buildPermissionBundle(dataTypes)
+
+            // Check which permissions are already granted
+            val resultBundle = try {
+                health.isHealthDataPermissionAcquired2(context.packageName, bundle)
+            } catch (_: Exception) { null }
+
+            val allGranted = resultBundle != null && parseAllGranted(resultBundle, dataTypes)
+            if (allGranted) return@withContext null
+
+            // Request missing permissions — returns an Intent to launch
+            return@withContext try {
+                val receiverStub = object : IHealthResultReceiver.Stub() {
+                    override fun send(resultCode: Int, resultData: Bundle?) {}
+                }
+                health.requestHealthDataPermissions2(
+                    context.packageName,
+                    HealthResultReceiver(receiverStub.asBinder()),
+                    bundle
+                )
+            } catch (_: Exception) { null }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun HealthDataType.toSamsungType(): String? = when (this) {
+        HealthDataType.STEPS -> TYPE_STEPS
+        HealthDataType.HEART_RATE -> TYPE_HEART_RATE
+        HealthDataType.SLEEP -> TYPE_SLEEP
+        HealthDataType.EXERCISE -> TYPE_EXERCISE
+        HealthDataType.BLOOD_PRESSURE -> TYPE_BLOOD_PRESSURE
+        HealthDataType.BLOOD_GLUCOSE -> TYPE_BLOOD_GLUCOSE
+        HealthDataType.OXYGEN_SATURATION -> TYPE_OXYGEN_SATURATION
+        HealthDataType.BODY_TEMPERATURE -> TYPE_BODY_TEMPERATURE
+        HealthDataType.WEIGHT -> TYPE_WEIGHT
+        HealthDataType.HEIGHT -> TYPE_HEIGHT
+        HealthDataType.BODY_FAT -> TYPE_BODY_FAT
+        HealthDataType.HYDRATION -> TYPE_WATER_INTAKE
+        else -> null
+    }
+
+    private fun buildPermissionBundle(dataTypes: List<String>): Bundle {
+        val permKeys = ArrayList<HealthPermissionManager.PermissionKey>(dataTypes.size)
+        for (dt in dataTypes) {
+            permKeys.add(HealthPermissionManager.PermissionKey(dt, HealthPermissionManager.PermissionType.READ))
+        }
+        return Bundle().apply {
+            putParcelableArrayList(HealthPermissionManager.BUNDLE_KEY, permKeys)
+        }
+    }
+
+    private fun parseAllGranted(result: Bundle, requestedTypes: List<String>): Boolean {
+        result.classLoader = HealthPermissionManager::class.java.classLoader
+        return try {
+            val list = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                result.getParcelableArrayList(HealthPermissionManager.BUNDLE_KEY, HealthPermissionManager.PermissionResult::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                result.getParcelableArrayList<HealthPermissionManager.PermissionResult>(HealthPermissionManager.BUNDLE_KEY)
+            }
+            if (list.isNullOrEmpty()) false
+            else list.all { it.isAcquired }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    // ── Service binding (IHealth) ─────────────────────────────────────────────
+
+    private inner class SamsungHealthIHealthConnection {
+        private var conn: ServiceConnection? = null
+        private val deferred = CompletableDeferred<IHealth?>()
+
+        suspend fun connect(): IHealth? {
+            conn = object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                    try {
+                        deferred.complete(IHealth.Stub.asInterface(service))
+                    } catch (e: Exception) {
+                        deferred.complete(null)
+                    }
+                }
+                override fun onServiceDisconnected(name: ComponentName) {}
+            }
+            val intent = Intent().apply {
+                component = ComponentName(SHEALTH_PACKAGE, SERVICE_CLASS)
+            }
+            val bound = withContext(Dispatchers.Main) {
+                context.bindService(intent, conn!!, Context.BIND_AUTO_CREATE)
+            }
+            if (!bound) return null
+            return withTimeoutOrNull(15_000L) { deferred.await() }
+        }
+
+        fun disconnect() {
+            conn?.let { c ->
+                try { context.unbindService(c) } catch (_: Exception) {}
+                conn = null
+            }
+        }
+    }
+
+    // ── Service binding (IDataResolver) ───────────────────────────────────────
 
     private inner class SamsungHealthConnection {
         private var conn: ServiceConnection? = null
