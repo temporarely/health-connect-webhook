@@ -65,6 +65,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.HCWebhook"
         tools:targetApi="31">
+
+        <!-- Samsung Health: declare data types this app is permitted to access.
+             Without these, Samsung Health shows the permission dialog but the
+             toggle is disabled and nothing can be granted. -->
+        <meta-data
+            android:name="com.samsung.android.health.permission.read"
+            android:value="com.samsung.health.step_count;com.samsung.health.heart_rate;com.samsung.health.sleep;com.samsung.health.sleep_stage;com.samsung.health.exercise;com.samsung.health.blood_pressure;com.samsung.health.blood_glucose;com.samsung.health.oxygen_saturation;com.samsung.health.body_temperature;com.samsung.health.weight;com.samsung.health.height;com.samsung.health.body_fat;com.samsung.health.water_intake;com.samsung.health.floors_climbed;com.samsung.shealth.step_daily_trend" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
