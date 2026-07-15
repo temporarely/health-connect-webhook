@@ -379,6 +379,16 @@ class SamsungHealthManager(private val context: Context) {
         try {
             val health = conn.connect() ?: return@withContext samsungHealthFallbackIntent()
 
+            // Register app with Samsung Health (exact sequence from SDK source).
+            // clientVersion=1007000 is what the real SDK sends; result=-1 means success.
+            try {
+                val clientInfo = Bundle().apply {
+                    putString("packageName", context.packageName)
+                    putInt("clientVersion", 1007000)
+                }
+                health.getConnectionResult2(clientInfo)
+            } catch (_: Exception) {}
+
             // Samsung Health must initialize before permission calls work
             waitForSamsungHealthInit(health)
 
@@ -412,7 +422,7 @@ class SamsungHealthManager(private val context: Context) {
     }
 
     private suspend fun waitForSamsungHealthInit(health: IHealth) {
-        withTimeoutOrNull(15_000L) {
+        withTimeoutOrNull(5_000L) {
             suspendCancellableCoroutine { cont ->
                 val stub = object : IHealthResultReceiver.Stub() {
                     override fun send(resultCode: Int, resultData: Bundle?) {
@@ -423,7 +433,7 @@ class SamsungHealthManager(private val context: Context) {
                     health.waitForInit2(
                         context.packageName,
                         HealthResultReceiver(stub.asBinder()),
-                        15_000L
+                        5_000L
                     )
                 } catch (_: Exception) {
                     if (cont.isActive) cont.resume(Unit)
@@ -523,8 +533,15 @@ class SamsungHealthManager(private val context: Context) {
             conn = object : ServiceConnection {
                 override fun onServiceConnected(name: ComponentName, service: IBinder) {
                     try {
-                        val resolver = IHealth.Stub.asInterface(service).getIDataResolver()
-                        deferred.complete(resolver)
+                        val health = IHealth.Stub.asInterface(service)
+                        try {
+                            val clientInfo = Bundle().apply {
+                                putString("packageName", context.packageName)
+                                putInt("clientVersion", 1007000)
+                            }
+                            health.getConnectionResult2(clientInfo)
+                        } catch (_: Exception) {}
+                        deferred.complete(health.getIDataResolver())
                     } catch (e: Exception) {
                         deferred.complete(null)
                     }
