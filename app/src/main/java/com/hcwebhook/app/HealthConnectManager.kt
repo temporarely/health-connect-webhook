@@ -393,7 +393,22 @@ class HealthConnectManager(private val context: Context) {
 
     suspend fun readTodayDashboardStats(grantedPermissions: Set<String>): Result<DashboardSnapshot> {
         return try {
-            val enabledTypes = PreferencesManager(context).getEnabledDataTypes()
+            val prefs = PreferencesManager(context)
+            val enabledTypes = prefs.getEnabledDataTypes()
+
+            if (prefs.getDataSource() == DataSource.SAMSUNG_HEALTH) {
+                if (enabledTypes.isEmpty()) return Result.success(DashboardSnapshot(emptyList()))
+                val zone = ZoneId.systemDefault()
+                val dayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant()
+                val dayEnd = Instant.now()
+                return SamsungHealthManager(context).readHealthData(
+                    enabledTypes = enabledTypes,
+                    lastSyncTimestamps = emptyMap(),
+                    start = dayStart,
+                    end = dayEnd
+                ).map { healthDataToDashboardSnapshot(it, enabledTypes) }
+            }
+
             val typesToLoad = grantedDataTypes(grantedPermissions).filter { it in enabledTypes }
             if (typesToLoad.isEmpty()) {
                 return Result.success(DashboardSnapshot(emptyList()))
@@ -595,6 +610,98 @@ class HealthConnectManager(private val context: Context) {
             DashboardFormatter::formatWeightKg,
             R.string.dashboard_sub_kg_latest,
         )
+    }
+
+    private fun healthDataToDashboardSnapshot(data: HealthData, enabledTypes: Set<HealthDataType>): DashboardSnapshot {
+        val metrics = enabledTypes.mapNotNull { type ->
+            try {
+                when (type) {
+                    HealthDataType.STEPS -> DashboardMetric(
+                        type, DashboardFormatter.formatSteps(data.steps.sumOf { it.count }), R.string.dashboard_sub_today)
+                    HealthDataType.SLEEP -> DashboardMetric(
+                        type, DashboardFormatter.formatDurationMinutes(DashboardFormatter.sumDurationsMinutes(data.sleep.map { it.duration })), R.string.dashboard_sub_today)
+                    HealthDataType.HEART_RATE -> {
+                        val avg = data.heartRate.map { it.bpm.toDouble() }.average().takeIf { data.heartRate.isNotEmpty() }
+                        DashboardMetric(type, DashboardFormatter.formatOptional(avg, DashboardFormatter::formatAverageBpm), if (avg != null) R.string.dashboard_sub_avg_bpm else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.HEART_RATE_VARIABILITY -> {
+                        val avg = data.heartRateVariability.map { it.rmssdMillis }.average().takeIf { data.heartRateVariability.isNotEmpty() }
+                        DashboardMetric(type, DashboardFormatter.formatOptional(avg, DashboardFormatter::formatHeartRateVariabilityMs), if (avg != null) R.string.dashboard_sub_ms_avg else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.DISTANCE -> DashboardMetric(
+                        type, DashboardFormatter.formatDistanceKm(data.distance.sumOf { it.meters }), R.string.dashboard_sub_km_today)
+                    HealthDataType.ACTIVE_CALORIES -> DashboardMetric(
+                        type, DashboardFormatter.formatCalories(data.activeCalories.sumOf { it.calories }), R.string.dashboard_sub_kcal_today)
+                    HealthDataType.TOTAL_CALORIES -> DashboardMetric(
+                        type, DashboardFormatter.formatCalories(data.totalCalories.sumOf { it.calories }), R.string.dashboard_sub_kcal_today)
+                    HealthDataType.WEIGHT -> {
+                        val v = data.weight.maxByOrNull { it.time }?.kilograms
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatWeightKg), if (v != null) R.string.dashboard_sub_kg_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.HEIGHT -> {
+                        val v = data.height.maxByOrNull { it.time }?.meters
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatHeightCm), if (v != null) R.string.dashboard_sub_cm_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.BLOOD_PRESSURE -> {
+                        val v = data.bloodPressure.maxByOrNull { it.time }
+                        DashboardMetric(type, if (v != null) DashboardFormatter.formatBloodPressure(v.systolic, v.diastolic) else DashboardFormatter.NO_DATA, if (v != null) R.string.dashboard_sub_mmhg_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.BLOOD_GLUCOSE -> {
+                        val v = data.bloodGlucose.maxByOrNull { it.time }?.mmolPerLiter
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatBloodGlucose), if (v != null) R.string.dashboard_sub_mmol_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.OXYGEN_SATURATION -> {
+                        val v = data.oxygenSaturation.maxByOrNull { it.time }?.percentage
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatPercentage), if (v != null) R.string.dashboard_sub_percent_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.BODY_TEMPERATURE -> {
+                        val v = data.bodyTemperature.maxByOrNull { it.time }?.celsius
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatCelsius), if (v != null) R.string.dashboard_sub_celsius_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.SKIN_TEMPERATURE -> {
+                        val v = data.skinTemperature.maxByOrNull { it.time }
+                        DashboardMetric(type, if (v != null) DashboardFormatter.formatSignedCelsius(v.deltaCelsius) else DashboardFormatter.NO_DATA, if (v != null) R.string.dashboard_sub_delta_celsius else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.RESPIRATORY_RATE -> {
+                        val avg = data.respiratoryRate.map { it.rate }.average().takeIf { data.respiratoryRate.isNotEmpty() }
+                        DashboardMetric(type, DashboardFormatter.formatOptional(avg, DashboardFormatter::formatRespiratoryRate), if (avg != null) R.string.dashboard_sub_per_min_avg else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.RESTING_HEART_RATE -> {
+                        val v = data.restingHeartRate.maxByOrNull { it.time }?.bpm?.toDouble()
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatAverageBpm), if (v != null) R.string.dashboard_sub_bpm_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.EXERCISE -> DashboardMetric(
+                        type, DashboardFormatter.formatDurationMinutes(DashboardFormatter.sumDurationsMinutes(data.exercise.map { it.duration })), R.string.dashboard_sub_sessions_today)
+                    HealthDataType.HYDRATION -> DashboardMetric(
+                        type, DashboardFormatter.formatLiters(data.hydration.sumOf { it.liters }), R.string.dashboard_sub_liters_today)
+                    HealthDataType.NUTRITION -> DashboardMetric(
+                        type, DashboardFormatter.formatCalories(data.nutrition.mapNotNull { it.calories }.sum()), R.string.dashboard_sub_kcal_today)
+                    HealthDataType.BASAL_METABOLIC_RATE -> {
+                        val v = data.basalMetabolicRate.sumOf { it.kcalPerDay }.takeIf { it > 0.0 }
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatCalories), if (v != null) R.string.dashboard_sub_kcal_today else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.BODY_FAT -> {
+                        val v = data.bodyFat.maxByOrNull { it.time }?.percentage
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatPercentage), if (v != null) R.string.dashboard_sub_percent_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.LEAN_BODY_MASS -> {
+                        val v = data.leanBodyMass.maxByOrNull { it.time }?.kilograms
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatWeightKg), if (v != null) R.string.dashboard_sub_kg_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.VO2_MAX -> {
+                        val v = data.vo2Max.maxByOrNull { it.time }?.mlPerKgPerMin
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatVo2Max), if (v != null) R.string.dashboard_sub_vo2_latest else R.string.dashboard_sub_no_data)
+                    }
+                    HealthDataType.BONE_MASS -> {
+                        val v = data.boneMass.maxByOrNull { it.time }?.kilograms
+                        DashboardMetric(type, DashboardFormatter.formatOptional(v, DashboardFormatter::formatWeightKg), if (v != null) R.string.dashboard_sub_kg_latest else R.string.dashboard_sub_no_data)
+                    }
+                }
+            } catch (_: Exception) {
+                DashboardMetric(type, DashboardFormatter.NO_DATA, R.string.dashboard_sub_no_data)
+            }
+        }
+        return DashboardSnapshot(metrics, Instant.now())
     }
 
     private fun latestMetric(
