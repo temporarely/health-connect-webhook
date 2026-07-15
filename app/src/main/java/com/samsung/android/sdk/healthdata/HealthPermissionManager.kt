@@ -16,9 +16,6 @@ class HealthPermissionManager {
         val permissionType: PermissionType
     ) : Parcelable {
 
-        fun getDataType(): String = dataType
-        fun getPermissionType(): PermissionType = permissionType
-
         override fun writeToParcel(dest: Parcel, flags: Int) {
             dest.writeString(dataType)
             dest.writeInt(permissionType.ordinal)
