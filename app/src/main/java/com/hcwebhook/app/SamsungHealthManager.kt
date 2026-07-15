@@ -29,7 +29,9 @@ class SamsungHealthManager(private val context: Context) {
 
     companion object {
         private const val SHEALTH_PACKAGE = "com.sec.android.app.shealth"
-        private const val SERVICE_CLASS = "com.samsung.android.sdk.healthdata.HealthDataService"
+        private const val SERVICE_ACTION = "com.samsung.android.sdk.healthdata.IHealthDataStore"
+        // bind flags 65 = BIND_AUTO_CREATE(1) | BIND_WAIVE_PRIORITY(64) — matches real SDK
+        private const val BIND_FLAGS = Context.BIND_AUTO_CREATE or 64
 
         private const val TYPE_STEPS = "com.samsung.health.step_count"
         private const val TYPE_HEART_RATE = "com.samsung.health.heart_rate"
@@ -498,11 +500,9 @@ class SamsungHealthManager(private val context: Context) {
                 }
                 override fun onServiceDisconnected(name: ComponentName) {}
             }
-            val intent = Intent().apply {
-                component = ComponentName(SHEALTH_PACKAGE, SERVICE_CLASS)
-            }
+            val intent = Intent(SERVICE_ACTION).apply { setPackage(SHEALTH_PACKAGE) }
             val bound = withContext(Dispatchers.Main) {
-                context.bindService(intent, conn!!, Context.BIND_AUTO_CREATE)
+                context.bindService(intent, conn!!, BIND_FLAGS)
             }
             if (!bound) return null
             return withTimeoutOrNull(15_000L) { deferred.await() }
@@ -541,11 +541,9 @@ class SamsungHealthManager(private val context: Context) {
                 }
                 override fun onServiceDisconnected(name: ComponentName) {}
             }
-            val intent = Intent().apply {
-                component = ComponentName(SHEALTH_PACKAGE, SERVICE_CLASS)
-            }
+            val intent = Intent(SERVICE_ACTION).apply { setPackage(SHEALTH_PACKAGE) }
             val bound = withContext(Dispatchers.Main) {
-                context.bindService(intent, conn!!, Context.BIND_AUTO_CREATE)
+                context.bindService(intent, conn!!, BIND_FLAGS)
             }
             if (!bound) return null
             return withTimeoutOrNull(15_000L) { deferred.await() }
