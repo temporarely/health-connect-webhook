@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import com.samsung.android.sdk.healthdata.HealthDataResolver
-import com.samsung.android.sdk.healthdata.HealthPermissionManager
 import com.samsung.android.sdk.healthdata.IHealth
 import com.samsung.android.sdk.healthdata.IDataResolver
 import com.samsung.android.sdk.internal.healthdata.HealthResultReceiver
@@ -463,26 +462,20 @@ class SamsungHealthManager(private val context: Context) {
     }
 
     private fun buildPermissionBundle(dataTypes: List<String>): Bundle {
-        val permKeys = ArrayList<HealthPermissionManager.PermissionKey>(dataTypes.size)
-        for (dt in dataTypes) {
-            permKeys.add(HealthPermissionManager.PermissionKey(dt, HealthPermissionManager.PermissionType.READ))
-        }
+        // Real SDK format (verified from bytecode): key=dataType, value=int[]{permType.getValue()}
+        // READ.getValue()=0, WRITE.getValue()=1
         return Bundle().apply {
-            putParcelableArrayList(HealthPermissionManager.BUNDLE_KEY, permKeys)
+            for (dt in dataTypes) putIntArray(dt, intArrayOf(0)) // 0 = READ
         }
     }
 
     private fun parseAllGranted(result: Bundle, requestedTypes: List<String>): Boolean {
-        result.classLoader = HealthPermissionManager::class.java.classLoader
+        // Response bundle: same keys, int[permType.getValue()] = 1 if granted, 0 if not
         return try {
-            val list = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                result.getParcelableArrayList(HealthPermissionManager.BUNDLE_KEY, HealthPermissionManager.PermissionResult::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                result.getParcelableArrayList<HealthPermissionManager.PermissionResult>(HealthPermissionManager.BUNDLE_KEY)
+            requestedTypes.all { dt ->
+                val arr = result.getIntArray(dt)
+                arr != null && arr.isNotEmpty() && arr[0] == 1
             }
-            if (list.isNullOrEmpty()) false
-            else list.all { it.isAcquired }
         } catch (_: Exception) {
             false
         }
