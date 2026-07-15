@@ -368,13 +368,20 @@ class SamsungHealthManager(private val context: Context) {
 
     // ── Permission check / request ────────────────────────────────────────────
 
+    // Returns null only when all permissions are POSITIVELY confirmed granted.
+    // Returns an Intent (specific permission UI or Samsung Health fallback) when
+    // permissions are missing OR when the service is unavailable / call fails.
     suspend fun getPermissionRequestIntentIfNeeded(enabledTypes: Set<HealthDataType>): Intent? = withContext(Dispatchers.IO) {
         val dataTypes = enabledTypes.map { it.toSamsungType() }.filterNotNull().distinct()
         if (dataTypes.isEmpty()) return@withContext null
 
         val conn = SamsungHealthIHealthConnection()
         try {
-            val health = conn.connect() ?: return@withContext null
+            val health = conn.connect() ?: return@withContext samsungHealthFallbackIntent()
+
+            // Samsung Health must initialize before permission calls work
+            waitForSamsungHealthInit(health)
+
             val bundle = buildPermissionBundle(dataTypes)
 
             // Check which permissions are already granted
@@ -385,8 +392,8 @@ class SamsungHealthManager(private val context: Context) {
             val allGranted = resultBundle != null && parseAllGranted(resultBundle, dataTypes)
             if (allGranted) return@withContext null
 
-            // Request missing permissions — returns an Intent to launch
-            return@withContext try {
+            // Request missing permissions — Samsung Health returns an Intent to launch
+            val permIntent = try {
                 val receiverStub = object : IHealthResultReceiver.Stub() {
                     override fun send(resultCode: Int, resultData: Bundle?) {}
                 }
@@ -396,10 +403,38 @@ class SamsungHealthManager(private val context: Context) {
                     bundle
                 )
             } catch (_: Exception) { null }
+
+            // Fall back to opening Samsung Health main screen if no specific intent
+            return@withContext permIntent ?: samsungHealthFallbackIntent()
         } finally {
             conn.disconnect()
         }
     }
+
+    private suspend fun waitForSamsungHealthInit(health: IHealth) {
+        withTimeoutOrNull(15_000L) {
+            suspendCancellableCoroutine { cont ->
+                val stub = object : IHealthResultReceiver.Stub() {
+                    override fun send(resultCode: Int, resultData: Bundle?) {
+                        if (cont.isActive) cont.resume(Unit)
+                    }
+                }
+                try {
+                    health.waitForInit2(
+                        context.packageName,
+                        HealthResultReceiver(stub.asBinder()),
+                        15_000L
+                    )
+                } catch (_: Exception) {
+                    if (cont.isActive) cont.resume(Unit)
+                }
+            }
+        }
+    }
+
+    private fun samsungHealthFallbackIntent(): Intent =
+        context.packageManager.getLaunchIntentForPackage(SHEALTH_PACKAGE)
+            ?: Intent(Intent.ACTION_MAIN).apply { setPackage(SHEALTH_PACKAGE) }
 
     private fun HealthDataType.toSamsungType(): String? = when (this) {
         HealthDataType.STEPS -> TYPE_STEPS
